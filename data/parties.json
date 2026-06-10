@@ -1,0 +1,91 @@
+{
+  "_dataset": {
+    "name": "intake-triage sample conflicts dataset",
+    "version": "1.0.0",
+    "as_of": "2026-06-01",
+    "fictional": true,
+    "notice": "FICTIONAL SAMPLE DATA for demonstration only. Every name, matter id, and relationship in this file was invented for this project. Any resemblance to real persons, companies, or matters is coincidental."
+  },
+  "parties": [
+    {
+      "id": "P-0001",
+      "name": "Meridian Fabrication LLC",
+      "role": "client",
+      "matter_id": "M-2023-014",
+      "first_seen": "2023-04-12",
+      "notes": "Active commercial client (contract dispute)."
+    },
+    {
+      "id": "P-0002",
+      "name": "Meridian Fabrication Holdings LLC",
+      "role": "related_entity",
+      "matter_id": "M-2023-014",
+      "first_seen": "2023-04-12",
+      "notes": "Parent company of Meridian Fabrication LLC."
+    },
+    {
+      "id": "P-0003",
+      "name": "Northgate Assurance Company",
+      "role": "adverse_party",
+      "matter_id": "M-2022-008",
+      "first_seen": "2022-06-30",
+      "notes": "Opposing insurance carrier in a closed personal-injury matter."
+    },
+    {
+      "id": "P-0004",
+      "name": "Harriet Quill",
+      "role": "client",
+      "matter_id": "M-2024-031",
+      "first_seen": "2024-09-03",
+      "notes": "Individual client (employment matter, closed)."
+    },
+    {
+      "id": "P-0005",
+      "name": "Dorian Voss",
+      "role": "adverse_party",
+      "matter_id": "M-2024-031",
+      "first_seen": "2024-09-03",
+      "notes": "Opposing party in Quill employment matter."
+    },
+    {
+      "id": "P-0006",
+      "name": "Bluewater Logistics Group Inc",
+      "role": "client",
+      "matter_id": "M-2021-002",
+      "first_seen": "2021-01-18",
+      "notes": "Former commercial client (engagement ended 2022)."
+    },
+    {
+      "id": "P-0007",
+      "name": "Castellan Property Holdings LP",
+      "role": "adverse_party",
+      "matter_id": "M-2025-006",
+      "first_seen": "2025-02-21",
+      "notes": "Opposing landlord entity in active lease dispute."
+    },
+    {
+      "id": "P-0008",
+      "name": "Pinnacle Crane & Rigging Corp",
+      "role": "adverse_party",
+      "matter_id": "M-2020-019",
+      "first_seen": "2020-11-05",
+      "notes": "Opposing party in closed workplace-injury matter."
+    },
+    {
+      "id": "P-0009",
+      "name": "Ottoline Marsh",
+      "role": "client",
+      "matter_id": "M-2025-006",
+      "first_seen": "2025-02-21",
+      "notes": "Individual client in active lease dispute."
+    },
+    {
+      "id": "P-0010",
+      "name": "Greystone Verdant Partners LLC",
+      "role": "related_entity",
+      "matter_id": "M-2021-002",
+      "first_seen": "2021-03-29",
+      "notes": "Affiliate of Bluewater Logistics Group Inc."
+    }
+  ]
+}

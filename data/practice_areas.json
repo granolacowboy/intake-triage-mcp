@@ -1,0 +1,53 @@
+{
+  "_dataset": {
+    "name": "intake-triage sample practice areas",
+    "version": "1.0.0",
+    "as_of": "2026-06-01",
+    "fictional": true,
+    "notice": "FICTIONAL SAMPLE DATA for demonstration only. These practice areas, descriptions, and field lists were invented for this project and are not derived from any real law firm."
+  },
+  "practice_areas": [
+    {
+      "id": "personal-injury",
+      "name": "Personal Injury",
+      "description": "Injury claims arising from vehicle collisions, premises incidents, and workplace accidents, typically against an insured party.",
+      "typical_matter_types": ["product", "other"],
+      "core_intake_fields": ["incident_date", "injury_description", "treatment_status", "insurance_carrier", "counterparty"]
+    },
+    {
+      "id": "employment",
+      "name": "Employment Law",
+      "description": "Wrongful termination, discrimination, wage-and-hour, and severance disputes on behalf of employees.",
+      "typical_matter_types": ["employment"],
+      "core_intake_fields": ["employer_name", "employment_status", "termination_date", "jurisdiction"]
+    },
+    {
+      "id": "family",
+      "name": "Family Law",
+      "description": "Divorce, custody, support, and related domestic-relations matters.",
+      "typical_matter_types": ["other"],
+      "core_intake_fields": ["marriage_date", "children_count", "jurisdiction", "counterparty"]
+    },
+    {
+      "id": "estate-planning",
+      "name": "Estate Planning & Probate",
+      "description": "Wills, trusts, powers of attorney, and probate administration.",
+      "typical_matter_types": ["other"],
+      "core_intake_fields": ["existing_will", "assets_overview", "family_structure"]
+    },
+    {
+      "id": "business",
+      "name": "Business & Commercial",
+      "description": "Contract disputes, entity formation, and commercial transactions for small and mid-size businesses.",
+      "typical_matter_types": ["contract", "ip", "regulatory"],
+      "core_intake_fields": ["business_entity_type", "contract_date", "counterparty", "dispute_value"]
+    },
+    {
+      "id": "criminal-defense",
+      "name": "Criminal Defense",
+      "description": "Defense of misdemeanor and felony charges, from investigation through trial.",
+      "typical_matter_types": ["investigation", "other"],
+      "core_intake_fields": ["charges", "arrest_date", "court_date", "jurisdiction"]
+    }
+  ]
+}
