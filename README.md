@@ -27,6 +27,23 @@ The server makes **no LLM calls and no network calls**. Same inputs, same output
 - **Validation as schema, not vibes.** All tool inputs are Pydantic models with `str_strip_whitespace`, `validate_assignment`, and `extra='forbid'` — malformed dates, unknown enum values, and unexpected fields are rejected before any tool logic runs, with errors the client model can act on.
 - **Support, not advice.** Tools return statuses, gaps, warnings, and templates — inputs to an attorney's judgment, never conclusions. The one place the server is opinionated is the conflicts gate, where the safe behavior is to stop.
 
+## Architecture
+
+The model does the language work; the server makes the decisions. Every eligibility call is deterministic code behind a hard gate, and every step is written to an append-only log with provenance.
+
+```mermaid
+flowchart TD
+  U["Client model — language work"] -->|MCP tool calls| SRV
+  subgraph SRV["intake_triage_mcp — deterministic · no LLM · no network"]
+    PA["practice-area lookup"]
+    CS["conflict screen"] --> GATE{"conflicts gate"}
+    GATE -->|"cleared / waived"| MV["matter validation"]
+    GATE -->|"hit · pending · not-run"| STOP["HARD STOP — no matter created"]
+    MV --> FU["follow-up draft"]
+  end
+  SRV --> LOG[("append-only triage log + provenance")]
+```
+
 ## Tools
 
 All five tools are prefixed `intake_` and use stdio. Read-only tools are annotated `readOnlyHint: true, openWorldHint: false`.
