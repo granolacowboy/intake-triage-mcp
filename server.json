@@ -1,0 +1,25 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.granolacowboy/intake-triage-mcp",
+  "title": "Legal Intake Triage",
+  "description": "Deterministic MCP server for legal intake triage: practice-area lookup, conflict-screening gate, matter validation, follow-up drafting, and gated triage logging. No LLM or network calls in the decision path.",
+  "repository": {
+    "url": "https://github.com/granolacowboy/intake-triage-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://granolacowboy.dev",
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/granolacowboy/intake-triage-mcp:0.1.0",
+      "transport": { "type": "stdio" },
+      "runtimeHint": "docker",
+      "runtimeArguments": [
+        { "type": "positional", "value": "run" },
+        { "type": "positional", "value": "-i" },
+        { "type": "positional", "value": "--rm" }
+      ]
+    }
+  ]
+}
