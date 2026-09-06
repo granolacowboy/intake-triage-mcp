@@ -2,7 +2,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-A small, deterministic [MCP](https://modelcontextprotocol.io) server for legal **intake triage**: practice-area lookup, conflict screening, matter validation, follow-up drafting, and triage logging — with a hard conflicts gate.
+A small, deterministic [MCP](https://modelcontextprotocol.io) server for legal **intake triage**: practice-area lookup, conflict screening, matter validation, follow-up drafting, and triage logging, with a hard conflicts gate.
 
 **Server name:** `intake_triage_mcp` · **Transport:** stdio · **Dependencies:** `mcp[cli]`, `pydantic` · **Sample data:** fictional, bundled
 
@@ -10,12 +10,12 @@ A small, deterministic [MCP](https://modelcontextprotocol.io) server for legal *
 
 ## The problem
 
-Law-firm intake is a translation problem. An inquiry arrives as messy prose ("I was rear-ended three weeks ago and the other driver's insurer keeps calling…") and has to become a structured, *defensible* record: who the parties are, whether the firm can even look at the matter (conflicts), what kind of matter it is, what's missing, and what was decided. LLMs are good at the prose half and unreliable at the record half — they'll happily "remember" a conflicts check that never ran.
+Law-firm intake is a translation problem. An inquiry arrives as messy prose ("I was rear-ended three weeks ago and the other driver's insurer keeps calling…") and has to become a structured, *defensible* record: who the parties are, whether the firm can even look at the matter (conflicts), what kind of matter it is, what's missing, and what was decided. LLMs are good at the prose half and unreliable at the record half. They'll happily "remember" a conflicts check that never ran.
 
 This server splits the work accordingly:
 
-- **The client model (Claude) does the language work** — reading the inquiry, extracting names, dates, and facts, writing the actual email around a template.
-- **The server does the record work** — deterministic validation, fuzzy conflict screening with provenance, a fixed risk matrix, canonical follow-up templates, and an append-only log that **refuses** to record an intake whose conflicts status is `not-run` unless a named human explicitly overrides it.
+- **The client model (Claude) does the language work**: reading the inquiry, extracting names, dates, and facts, writing the actual email around a template.
+- **The server does the record work**: deterministic validation, fuzzy conflict screening with provenance, a fixed risk matrix, canonical follow-up templates, and an append-only log that **refuses** to record an intake whose conflicts status is `not-run` unless a named human explicitly overrides it.
 
 The server makes **no LLM calls and no network calls**. Same inputs, same outputs, every time.
 
@@ -24,8 +24,8 @@ The server makes **no LLM calls and no network calls**. Same inputs, same output
 - **Deterministic tools, client-side extraction.** An MCP tool that calls an LLM to "summarize" hides nondeterminism behind a tool boundary. Extraction and summarization stay with the client model; every tool here is a pure function over validated inputs (plus one append-only file write).
 - **Conflicts conventions from [anthropics/claude-for-legal](https://github.com/anthropics/claude-for-legal).** The conflicts status enum (`cleared | pending | not-run | waived`), the hard STOP on `not-run`, and the explicit, permanently-recorded override path are modeled on the `matter-intake` skill. The matter field set (identification / source / risk triage / materiality / key dates) follows the same source.
 - **Provenance in every data-backed result.** Conflict matches and practice-area listings carry source, dataset version, as-of date, and a citation-ready record identifier (`P-0003`, `M-2022-008`), per the claude-for-legal connector conventions.
-- **Validation as schema, not vibes.** All tool inputs are Pydantic models with `str_strip_whitespace`, `validate_assignment`, and `extra='forbid'` — malformed dates, unknown enum values, and unexpected fields are rejected before any tool logic runs, with errors the client model can act on.
-- **Support, not advice.** Tools return statuses, gaps, warnings, and templates — inputs to an attorney's judgment, never conclusions. The one place the server is opinionated is the conflicts gate, where the safe behavior is to stop.
+- **Validation as schema, not vibes.** All tool inputs are Pydantic models with `str_strip_whitespace`, `validate_assignment`, and `extra='forbid'`. Malformed dates, unknown enum values, and unexpected fields are rejected before any tool logic runs, with errors the client model can act on.
+- **Support, not advice.** Tools return statuses, gaps, warnings, and templates: inputs to an attorney's judgment, never conclusions. The one place the server is opinionated is the conflicts gate, where the safe behavior is to stop.
 
 ## Architecture
 
@@ -33,12 +33,12 @@ The model does the language work; the server makes the decisions. Every eligibil
 
 ```mermaid
 flowchart TD
-  U["Client model — language work"] -->|MCP tool calls| SRV
-  subgraph SRV["intake_triage_mcp — deterministic · no LLM · no network"]
+  U["Client model: language work"] -->|MCP tool calls| SRV
+  subgraph SRV["intake_triage_mcp: deterministic · no LLM · no network"]
     PA["practice-area lookup"]
     CS["conflict screen"] --> GATE{"conflicts gate"}
     GATE -->|"cleared / waived"| MV["matter validation"]
-    GATE -->|"hit · pending · not-run"| STOP["HARD STOP — no matter created"]
+    GATE -->|"hit · pending · not-run"| STOP["HARD STOP: no matter created"]
     MV --> FU["follow-up draft"]
   end
   SRV --> LOG[("append-only triage log + provenance")]
@@ -51,14 +51,14 @@ All five tools are prefixed `intake_` and use stdio. Read-only tools are annotat
 | Tool | Type | What it does |
 |---|---|---|
 | `intake_list_practice_areas` | read-only | Lists practice areas (id, name, description, typical matter types, core intake fields) from bundled sample data, with provenance. |
-| `intake_check_conflicts` | read-only | Screens 1–25 party names against the bundled fictional conflicts dataset using deterministic fuzzy matching (case/punctuation-insensitive, legal-suffix-aware, token-order-insensitive). Returns `pending` (hits found → human review) or `cleared` (no hits *in this dataset*), with per-match provenance and scores. |
+| `intake_check_conflicts` | read-only | Screens 1 to 25 party names against the bundled fictional conflicts dataset using deterministic fuzzy matching (case/punctuation-insensitive, legal-suffix-aware, token-order-insensitive). Returns `pending` (hits found → human review) or `cleared` (no hits *in this dataset*), with per-match provenance and scores. |
 | `intake_validate_matter` | read-only | Validates a structured matter summary (identification / source / risk triage / materiality / key dates), normalizes it, derives a risk rating from the severity × likelihood matrix, defaults conflicts to `not-run`, and returns the list of missing recommended fields plus warnings. |
 | `intake_draft_followup` | read-only | Returns a deterministic follow-up email **template** with `{{client_name}}`, `{{firm_name}}`, `{{sender_name}}` merge slots and one canonical question per missing field. No LLM, no sending. |
 | `intake_log_triage` | write (append-only) | Appends one triage row to a local JSONL log (`$INTAKE_TRIAGE_LOG_PATH`, default `./triage_log.jsonl`). Never edits or deletes existing rows. **Refuses** `conflicts_status='not-run'` unless `conflicts_override_by` *and* `conflicts_override_rationale` are both provided; overrides are recorded permanently in the row. |
 
 **Risk matrix** (`severity`, `likelihood` → rating): `high+high → critical`; `high+medium`, `medium+high` → `high`; `high+low`, `low+high`, `medium+medium` → `medium`; everything else → `low`.
 
-**Conflict-screen semantics:** `pending` and `cleared` are the only statuses the screen itself produces. `not-run` and `waived` are human determinations recorded via `intake_log_triage`. A `cleared` screen means "no hits in the bundled sample dataset" — it is never a firm-wide conflicts clearance.
+**Conflict-screen semantics:** `pending` and `cleared` are the only statuses the screen itself produces. `not-run` and `waived` are human determinations recorded via `intake_log_triage`. A `cleared` screen means "no hits in the bundled sample dataset". It is never a firm-wide conflicts clearance.
 
 ## Install & run
 
@@ -98,11 +98,11 @@ Add to `claude_desktop_config.json`:
 claude mcp add intake-triage -- python /absolute/path/to/intake-triage-mcp/server.py
 ```
 
-Optional environment variable: `INTAKE_TRIAGE_LOG_PATH` — where `intake_log_triage` appends its JSONL rows (default `./triage_log.jsonl`).
+Optional environment variable: `INTAKE_TRIAGE_LOG_PATH`, where `intake_log_triage` appends its JSONL rows (default `./triage_log.jsonl`).
 
 ## Worked examples
 
-### Example 1 — inquiry with a conflict hit
+### Example 1: inquiry with a conflict hit
 
 **Raw inquiry (web form):**
 
@@ -166,15 +166,15 @@ The client model fills the slots and adapts the tone; the questions and the no-a
 {"logged": true, "log_path": "triage_log.jsonl", "entry_number": 1, "row": {"...": "..."}}
 ```
 
-### Example 2 — clean screen, complete record
+### Example 2: clean screen, complete record
 
 **Raw inquiry:** a contract dispute with "Veldhuis Imports BV", a name with no history at the firm.
 
-1. `intake_check_conflicts` → `{"party_names": ["Veldhuis Imports BV"]}` → `"status": "cleared"`, `match_count: 0` (screen-level only — the disclaimer in the result says exactly that).
+1. `intake_check_conflicts` → `{"party_names": ["Veldhuis Imports BV"]}` → `"status": "cleared"`, `match_count: 0` (screen-level only, the disclaimer in the result says exactly that).
 2. `intake_validate_matter` with the full field set (`matter_type: "contract"`, `our_role: "plaintiff"`, `practice_area: "business"`, `source: "referral"`, `conflicts_status: "cleared"`, `severity: "medium"`, `likelihood: "low"`, `response_deadline: "2026-08-01"`) → `missing_recommended_fields: []`, derived `risk_rating: "low"`.
 3. `intake_log_triage` with `conflicts_status: "cleared"` → row appended, `entry_number: 2`.
 
-### Example 3 — the conflicts gate refuses a silent bypass
+### Example 3: the conflicts gate refuses a silent bypass
 
 The user says "skip the conflicts stuff, just log it." The model attempts:
 
@@ -195,7 +195,7 @@ Nothing is written. If a named human genuinely needs to bypass (e.g., an emergen
 
 ## Testing
 
-Plain pytest **unit tests** cover the deterministic logic: name normalization and similarity, match classification, the full 3×3 risk matrix, validation and missing-field reporting, template determinism, the conflicts gate, and JSONL appends. (These are unit tests, not the eval harness — that's below.)
+Plain pytest **unit tests** cover the deterministic logic: name normalization and similarity, match classification, the full 3×3 risk matrix, validation and missing-field reporting, template determinism, the conflicts gate, and JSONL appends. (These are unit tests, not the eval harness; that's below.)
 
 ```bash
 pip install -r requirements-dev.txt
@@ -214,15 +214,15 @@ export ANTHROPIC_API_KEY=your_key_here
 python evals/evaluation.py -t stdio -c python -a server.py -o evals/report.md evals/evaluation.xml
 ```
 
-Run from the repo root (the harness launches `python server.py` itself — don't start the server manually). The generated `evals/report.md` includes accuracy, per-task tool-call traces, and the agent's feedback on the tool design.
+Run from the repo root (the harness launches `python server.py` itself; don't start the server manually). The generated `evals/report.md` includes accuracy, per-task tool-call traces, and the agent's feedback on the tool design.
 
-## Limitations — what this server does not do
+## Limitations: what this server does not do
 
 - **It does not give legal advice.** It validates structure, screens names, fills templates, and keeps a log. Every output is an input to an attorney's judgment; the attorney owns every decision, including whether a conflict actually exists.
 - **The conflict check is illustrative.** It is a fuzzy screen over a small bundled dataset. A real conflicts process spans the firm's full matter history, related entities, and lateral-hire obligations. A `cleared` here means only "no hits in this sample file."
-- **All sample data is fictional.** Every name, matter id, and relationship in `data/` was invented for this project (and labeled as such in the files). No real client data, ever. Point the design at your own data source before any real use — and then treat the log and datasets as confidential.
+- **All sample data is fictional.** Every name, matter id, and relationship in `data/` was invented for this project (and labeled as such in the files). No real client data, ever. Point the design at your own data source before any real use, and then treat the log and datasets as confidential.
 - **It does not extract, summarize, or send anything.** Reading the inquiry and writing the final email are the client model's (or a human's) job. The server never calls an LLM and never touches the network.
-- **It does not decide the matter's theory, severity, or likelihood.** The risk rating is a fixed matrix over bands *you* supply — a labeling convention, not an assessment.
+- **It does not decide the matter's theory, severity, or likelihood.** The risk rating is a fixed matrix over bands *you* supply: a labeling convention, not an assessment.
 - **Persistence is a local JSONL file.** No database, no sync, no multi-user concurrency control. The log is append-only by design; rotating or archiving it is up to you.
 
 ## Security & permissions
@@ -230,8 +230,8 @@ Run from the repo root (the harness launches `python server.py` itself — don't
 - Runs locally over stdio as a subprocess of the MCP client; binds no ports, makes no network requests.
 - Reads only its bundled `data/*.json`; writes only the triage log file (path controlled by `INTAKE_TRIAGE_LOG_PATH`).
 - Logs to stderr only (stdout is reserved for the protocol).
-- No credentials are required or read. Treat the triage log as confidential — it's `.gitignore`d by default.
+- No credentials are required or read. Treat the triage log as confidential; it's `.gitignore`d by default.
 
 ## License
 
-[Apache-2.0](LICENSE) — matching the claude-for-legal project whose conventions this server borrows.
+[Apache-2.0](LICENSE), matching the claude-for-legal project whose conventions this server borrows.
