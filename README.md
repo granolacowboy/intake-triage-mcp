@@ -23,25 +23,25 @@ The server makes **no LLM calls and no network calls**. Same inputs, same output
 
 - **Deterministic tools, client-side extraction.** An MCP tool that calls an LLM to "summarize" hides nondeterminism behind a tool boundary. Extraction and summarization stay with the client model; every tool here is a pure function over validated inputs (plus one append-only file write).
 - **Conflicts conventions from [anthropics/claude-for-legal](https://github.com/anthropics/claude-for-legal).** The conflicts status enum (`cleared | pending | not-run | waived`), the hard STOP on `not-run`, and the explicit, permanently-recorded override path are modeled on the `matter-intake` skill. The matter field set (identification / source / risk triage / materiality / key dates) follows the same source.
-- **Provenance in every data-backed result.** Conflict matches and practice-area listings carry source, dataset version, as-of date, and a citation-ready record identifier (`P-0003`, `M-2022-008`), per the claude-for-legal connector conventions.
+- **Provenance in every data-backed result.** Conflict matches and practice-area listings carry source, dataset version, and as-of date; each conflict match also carries a citation-ready record identifier (`P-0003`, `M-2022-008`), per the claude-for-legal connector conventions.
 - **Validation as schema, not vibes.** All tool inputs are Pydantic models with `str_strip_whitespace`, `validate_assignment`, and `extra='forbid'`. Malformed dates, unknown enum values, and unexpected fields are rejected before any tool logic runs, with errors the client model can act on.
 - **Support, not advice.** Tools return statuses, gaps, warnings, and templates: inputs to an attorney's judgment, never conclusions. The one place the server is opinionated is the conflicts gate, where the safe behavior is to stop.
 
 ## Architecture
 
-The model does the language work; the server makes the decisions. Every eligibility call is deterministic code behind a hard gate, and every step is written to an append-only log with provenance.
+The model does the language work; the server does the record work. Four tools are read-only and store nothing; only `intake_log_triage` writes, appending one row to a local log behind the conflicts gate.
 
 ```mermaid
 flowchart TD
   U["Client model: language work"] -->|MCP tool calls| SRV
   subgraph SRV["intake_triage_mcp: deterministic · no LLM · no network"]
-    PA["practice-area lookup"]
-    CS["conflict screen"] --> GATE{"conflicts gate"}
-    GATE -->|"cleared / waived"| MV["matter validation"]
-    GATE -->|"hit · pending · not-run"| STOP["HARD STOP: no matter created"]
-    MV --> FU["follow-up draft"]
+    RO["read-only tools (store nothing):<br/>list_practice_areas · check_conflicts<br/>validate_matter · draft_followup"]
+    LT["intake_log_triage: the only writer"] --> GATE{"conflicts gate"}
+    GATE -->|"cleared / pending / waived"| WRITE["append row to log"]
+    GATE -->|"not-run + named override"| WRITE
+    GATE -->|"not-run, no override"| STOP["REFUSED: nothing written"]
   end
-  SRV --> LOG[("append-only triage log + provenance")]
+  WRITE --> LOG[("append-only triage log")]
 ```
 
 ## Tools
@@ -53,7 +53,7 @@ All five tools are prefixed `intake_` and use stdio. Read-only tools are annotat
 | `intake_list_practice_areas` | read-only | Lists practice areas (id, name, description, typical matter types, core intake fields) from bundled sample data, with provenance. |
 | `intake_check_conflicts` | read-only | Screens 1 to 25 party names against the bundled fictional conflicts dataset using deterministic fuzzy matching (case/punctuation-insensitive, legal-suffix-aware, token-order-insensitive). Returns `pending` (hits found → human review) or `cleared` (no hits *in this dataset*), with per-match provenance and scores. |
 | `intake_validate_matter` | read-only | Validates a structured matter summary (identification / source / risk triage / materiality / key dates), normalizes it, derives a risk rating from the severity × likelihood matrix, defaults conflicts to `not-run`, and returns the list of missing recommended fields plus warnings. |
-| `intake_draft_followup` | read-only | Returns a deterministic follow-up email **template** with `{{client_name}}`, `{{firm_name}}`, `{{sender_name}}` merge slots and one canonical question per missing field. No LLM, no sending. |
+| `intake_draft_followup` | read-only | Returns a deterministic follow-up email **template** with `{{client_name}}`, `{{firm_name}}`, `{{sender_name}}` merge slots and one question per missing field (canonical phrasing for known fields, a generic phrasing otherwise). No LLM, no sending. |
 | `intake_log_triage` | write (append-only) | Appends one triage row to a local JSONL log (`$INTAKE_TRIAGE_LOG_PATH`, default `./triage_log.jsonl`). Never edits or deletes existing rows. **Refuses** `conflicts_status='not-run'` unless `conflicts_override_by` *and* `conflicts_override_rationale` are both provided; overrides are recorded permanently in the row. |
 
 **Risk matrix** (`severity`, `likelihood` → rating): `high+high → critical`; `high+medium`, `medium+high` → `high`; `high+low`, `low+high`, `medium+medium` → `medium`; everything else → `low`.
@@ -61,6 +61,10 @@ All five tools are prefixed `intake_` and use stdio. Read-only tools are annotat
 **Conflict-screen semantics:** `pending` and `cleared` are the only statuses the screen itself produces. `not-run` and `waived` are human determinations recorded via `intake_log_triage`. A `cleared` screen means "no hits in the bundled sample dataset". It is never a firm-wide conflicts clearance.
 
 ## Install & run
+
+The server speaks stdio. Run it from source or as a container.
+
+### From source
 
 Requires Python 3.10+.
 
@@ -77,9 +81,40 @@ Interactive inspection (optional):
 npx @modelcontextprotocol/inspector python server.py
 ```
 
+### Container
+
+Build the image from the bundled `Dockerfile` and run it over stdio:
+
+```bash
+docker build -t intake-triage-mcp .
+docker run -i --rm intake-triage-mcp
+```
+
+The default log path inside the container (`/app/triage_log.jsonl`) is discarded with `--rm`. To keep the log, mount a volume and point `INTAKE_TRIAGE_LOG_PATH` at it:
+
+```bash
+docker run -i --rm \
+  -e INTAKE_TRIAGE_LOG_PATH=/data/triage_log.jsonl \
+  -v "$PWD/triage-data:/data" \
+  intake-triage-mcp
+```
+
+### Published image and MCP Registry
+
+A `v*` tag triggers the `publish-mcp.yml` workflow, which builds the image, pushes it to GHCR, smoke-tests `initialize` + `tools/list`, confirms the image is publicly pullable, and registers the server with the official [MCP Registry](https://github.com/modelcontextprotocol/registry) over GitHub OIDC (no long-lived secret). It does not run the eval suite (that stays a manual step, below).
+
+- OCI image: `ghcr.io/granolacowboy/intake-triage-mcp` (linux/amd64; versioned tag plus `latest`)
+- MCP Registry name: `io.github.granolacowboy/intake-triage-mcp`
+
+Once a release is published, run the image directly instead of building it:
+
+```bash
+docker run -i --rm ghcr.io/granolacowboy/intake-triage-mcp:0.1.0
+```
+
 ### Claude Desktop
 
-Add to `claude_desktop_config.json`:
+Add one server block to `claude_desktop_config.json`. From source:
 
 ```json
 {
@@ -92,11 +127,34 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
+Or with the container image built above:
+
+```json
+{
+  "mcpServers": {
+    "intake-triage": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "intake-triage-mcp"]
+    }
+  }
+}
+```
+
 ### Claude Code
+
+From source:
 
 ```bash
 claude mcp add intake-triage -- python /absolute/path/to/intake-triage-mcp/server.py
 ```
+
+Or with the container image built above:
+
+```bash
+claude mcp add intake-triage -- docker run -i --rm intake-triage-mcp
+```
+
+For the Docker configs, substitute `ghcr.io/granolacowboy/intake-triage-mcp:0.1.0` for the local `intake-triage-mcp` tag once a release is published.
 
 Optional environment variable: `INTAKE_TRIAGE_LOG_PATH`, where `intake_log_triage` appends its JSONL rows (default `./triage_log.jsonl`).
 
@@ -106,7 +164,7 @@ Optional environment variable: `INTAKE_TRIAGE_LOG_PATH`, where `intake_log_triag
 
 **Raw inquiry (web form):**
 
-> "Hi — I was rear-ended on I-90 about three weeks ago and my shoulder still hurts. The other driver's insurer, Northgate Assurance Co, keeps calling me. Do I have a case? — Priya"
+> "Hi, I was rear-ended on I-90 about three weeks ago and my shoulder still hurts. The other driver's insurer, Northgate Assurance Co, keeps calling me. Do I have a case? (Priya)"
 
 The client model extracts the parties and drives the tools:
 
@@ -135,7 +193,7 @@ The client model extracts the parties and drives the tools:
 }
 ```
 
-The suffix-aware matcher treats "…Co" and "…Company" as the same entity. A hit means `pending`: a human conflicts review is required.
+*(Abbreviated: the full result also carries per-match `notes`, a `status_semantics` map, and a fictional-data `disclaimer`.)* The suffix-aware matcher treats "…Co" and "…Company" as the same entity. A hit means `pending`: a human conflicts review is required.
 
 **2.** `intake_validate_matter` → `{"matter_name": "Priya rear-end collision inquiry", "matter_type": "other", "our_role": "claimant", "practice_area": "personal-injury", "source": "web-inquiry", "conflicts_status": "pending"}`
 
@@ -171,7 +229,7 @@ The client model fills the slots and adapts the tone; the questions and the no-a
 **Raw inquiry:** a contract dispute with "Veldhuis Imports BV", a name with no history at the firm.
 
 1. `intake_check_conflicts` → `{"party_names": ["Veldhuis Imports BV"]}` → `"status": "cleared"`, `match_count: 0` (screen-level only, the disclaimer in the result says exactly that).
-2. `intake_validate_matter` with the full field set (`matter_type: "contract"`, `our_role: "plaintiff"`, `practice_area: "business"`, `source: "referral"`, `conflicts_status: "cleared"`, `severity: "medium"`, `likelihood: "low"`, `response_deadline: "2026-08-01"`) → `missing_recommended_fields: []`, derived `risk_rating: "low"`.
+2. `intake_validate_matter` with the full field set (`counterparty: "Veldhuis Imports BV"`, `matter_type: "contract"`, `our_role: "plaintiff"`, `jurisdiction: "Cook County Circuit Court"`, `practice_area: "business"`, `source: "referral"`, `conflicts_status: "cleared"`, `severity: "medium"`, `likelihood: "low"`, `response_deadline: "2026-08-01"`) → `missing_recommended_fields: []`, derived `risk_rating: "low"`.
 3. `intake_log_triage` with `conflicts_status: "cleared"` → row appended, `entry_number: 2`.
 
 ### Example 3: the conflicts gate refuses a silent bypass
