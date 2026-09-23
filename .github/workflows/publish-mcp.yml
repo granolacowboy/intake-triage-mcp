@@ -24,13 +24,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          test -n "$VERSION"
           SERVER_VERSION=$(python3 -c 'import json; print(json.load(open("server.json"))["version"])')
-          if [ "$SERVER_VERSION" != "$VERSION" ]; then
-            echo "::error::tag version $VERSION does not match server.json version $SERVER_VERSION"
-            exit 1
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            if [ "$SERVER_VERSION" != "$VERSION" ]; then
+              echo "::error::tag version $VERSION does not match server.json version $SERVER_VERSION"
+              exit 1
+            fi
+          else
+            # workflow_dispatch on a branch republishes the version declared in server.json.
+            VERSION="$SERVER_VERSION"
           fi
+          test -n "$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
