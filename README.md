@@ -1,5 +1,7 @@
 # intake-triage-mcp
 
+[![CI](https://github.com/granolacowboy/intake-triage-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/granolacowboy/intake-triage-mcp/actions/workflows/ci.yml)
+[![Publish MCP](https://github.com/granolacowboy/intake-triage-mcp/actions/workflows/publish-mcp.yml/badge.svg)](https://github.com/granolacowboy/intake-triage-mcp/actions/workflows/publish-mcp.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 A small, deterministic [MCP](https://modelcontextprotocol.io) server for legal **intake triage**: practice-area lookup, conflict screening, matter validation, follow-up drafting, and triage logging, with a hard conflicts gate.
@@ -259,6 +261,8 @@ Plain pytest **unit tests** cover the deterministic logic: name normalization an
 pip install -r requirements-dev.txt
 pytest
 ```
+
+CI runs the unit suite on Python 3.10 and 3.12, then builds the Docker image and performs an MCP protocol smoke test that verifies all five tools are discoverable before a change is considered healthy.
 
 ## Evaluation
 
