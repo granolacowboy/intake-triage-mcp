@@ -1,22 +1,29 @@
 # syntax=docker/dockerfile:1
 # Container image for the intake-triage-mcp server (stdio transport).
-# Published to ghcr.io and registered in the official MCP Registry.
 FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Create the runtime identity before copying application files. Package
+# installation happens as root during the image build; the server never does.
+RUN groupadd --system mcp \
+    && useradd --system --gid mcp --home-dir /app --no-create-home mcp
 
 WORKDIR /app
 
-# Runtime deps first for layer caching.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Server + bundled (fictional) sample data. server.py loads data/ relative to
-# its own location, so they must sit together under /app.
-COPY server.py .
-COPY data ./data
+COPY --chown=mcp:mcp server.py .
+COPY --chown=mcp:mcp data ./data
 
-# MCP Registry ownership verification for the OCI package type: this label MUST
-# match the "name" field in server.json.
+# MCP Registry ownership verification for the OCI package type.
 LABEL io.modelcontextprotocol.server.name="io.github.granolacowboy/intake-triage-mcp"
 
-# stdio JSON-RPC on stdin/stdout; logs go to stderr.
+# The default append-only log is /app/triage_log.jsonl, so the runtime user
+# owns /app but has no root privileges.
+RUN chown mcp:mcp /app
+USER mcp
+
 ENTRYPOINT ["python", "server.py"]

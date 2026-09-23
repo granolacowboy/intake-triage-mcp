@@ -19,7 +19,9 @@ This server splits the work accordingly:
 - **The client model (Claude) does the language work**: reading the inquiry, extracting names, dates, and facts, writing the actual email around a template.
 - **The server does the record work**: deterministic validation, fuzzy conflict screening with provenance, a fixed risk matrix, canonical follow-up templates, and an append-only log that **refuses** to record an intake whose conflicts status is `not-run` unless a named human explicitly overrides it.
 
-The server makes **no LLM calls and no network calls**. Same inputs, same outputs, every time.
+The server makes **no LLM calls and no network calls**. Same inputs, same outputs, every time. The published container also runs as an unprivileged `mcp` user rather than root.
+
+> **Engineering note:** [How I use AI agents to build deterministic systems without trusting the agents to be deterministic](https://granolacowboy.dev/writing/post-4-deterministic-ai) explains the broader verification pattern behind this project.
 
 ## Design rationale
 
@@ -103,7 +105,9 @@ docker run -i --rm \
 
 ### Published image and MCP Registry
 
-A `v*` tag triggers the `publish-mcp.yml` workflow, which builds the image, pushes it to GHCR, smoke-tests `initialize` + `tools/list`, confirms the image is publicly pullable, and registers the server with the official [MCP Registry](https://github.com/modelcontextprotocol/registry) over GitHub OIDC (no long-lived secret). It does not run the eval suite (that stays a manual step, below).
+A `v*` tag triggers the `publish-mcp.yml` workflow. It validates tag/version alignment, builds and pushes the image, smoke-tests `initialize` + `tools/list`, generates a CycloneDX SBOM, records HIGH/CRITICAL vulnerability findings, fails closed on fixable CRITICAL findings, signs the image and attests the SBOM digest with keyless Sigstore/Cosign via GitHub OIDC, confirms anonymous pulls work, publishes to the official [MCP Registry](https://github.com/modelcontextprotocol/registry), and creates a GitHub Release with the evidence files attached.
+
+BuildKit's embedded provenance/SBOM output remains disabled deliberately because the MCP Registry currently expects the ownership label on a plain image manifest. Supply-chain evidence is therefore attached as separate OCI attestations and release artifacts rather than hidden behind a multi-manifest attestation index. The eval suite remains a separate, model-driven check.
 
 - OCI image: `ghcr.io/granolacowboy/intake-triage-mcp` (linux/amd64; versioned tag plus `latest`)
 - MCP Registry name: `io.github.granolacowboy/intake-triage-mcp`
