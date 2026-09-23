@@ -11,7 +11,8 @@ permissions:
 jobs:
   unit:
     name: pytest (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, gcd]
     strategy:
       fail-fast: false
       matrix:
@@ -39,7 +40,8 @@ jobs:
   container-smoke:
     name: container MCP smoke test
     needs: unit
-    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, gcd]
 
     steps:
       - name: Checkout
