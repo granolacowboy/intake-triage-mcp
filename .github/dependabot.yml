@@ -19,3 +19,13 @@ updates:
       actions:
         patterns: ["*"]
     open-pull-requests-limit: 5
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      container-base:
+        patterns: ["*"]
+    open-pull-requests-limit: 3
