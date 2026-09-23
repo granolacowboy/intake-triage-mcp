@@ -21,6 +21,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Run release unit tests
+        run: |
+          python -m pip install -r requirements-dev.txt
+          python -m pytest -q
+
       - name: Resolve and validate release version
         id: release
         shell: bash
@@ -72,6 +86,12 @@ jobs:
           set -euo pipefail
           IMAGE="${{ steps.release.outputs.image }}:${{ steps.release.outputs.version }}"
           docker pull "$IMAGE"
+          RUNTIME_UID=$(docker run --rm --entrypoint id "$IMAGE" -u)
+          echo "Container runtime UID: $RUNTIME_UID"
+          [ "$RUNTIME_UID" != "0" ] || {
+            echo "::error::published container unexpectedly runs as root"
+            exit 1
+          }
           REQ='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci-smoke","version":"0.0.0"}}}
           {"jsonrpc":"2.0","method":"notifications/initialized"}
           {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
@@ -88,6 +108,7 @@ jobs:
       - name: Generate CycloneDX SBOM
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          version: v0.74.0
           image-ref: ${{ steps.release.outputs.image }}@${{ steps.build.outputs.digest }}
           format: cyclonedx
           output: sbom.cdx.json
@@ -96,6 +117,7 @@ jobs:
       - name: Record HIGH and CRITICAL vulnerability evidence
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          version: v0.74.0
           image-ref: ${{ steps.release.outputs.image }}@${{ steps.build.outputs.digest }}
           format: json
           output: trivy-vulnerabilities.json
@@ -106,6 +128,7 @@ jobs:
       - name: Fail closed on fixable CRITICAL vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
         with:
+          version: v0.74.0
           image-ref: ${{ steps.release.outputs.image }}@${{ steps.build.outputs.digest }}
           format: table
           severity: CRITICAL
