@@ -1,8 +1,8 @@
 name: Publish to MCP Registry
 
-# Builds the OCI image, pushes it to GHCR, smoke-tests it, verifies it is
-# publicly pullable, then registers the server with the official MCP Registry
-# using GitHub OIDC (no interactive login, no long-lived secret).
+# Publishes a plain single-platform image because the MCP Registry reads the
+# ownership label from the image config. Supply-chain evidence is attached
+# separately as SBOM, vulnerability report, and keyless Sigstore attestations.
 on:
   workflow_dispatch:
   push:
@@ -10,11 +10,13 @@ on:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, gcd]
+    timeout-minutes: 30
     permissions:
-      id-token: write   # OIDC auth to the MCP Registry
-      contents: read
-      packages: write   # push to GHCR
+      id-token: write
+      contents: write
+      packages: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,11 +34,11 @@ jobs:
               exit 1
             fi
           else
-            # workflow_dispatch on a branch republishes the version declared in server.json.
             VERSION="$SERVER_VERSION"
           fi
           test -n "$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/granolacowboy/intake-triage-mcp" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -48,10 +50,11 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Single-platform, provenance/sbom off => a plain single image manifest so
-      # the io.modelcontextprotocol.server.name label sits in the image config
-      # the MCP Registry inspects (not hidden behind an attestation index).
+      # Keep provenance/sbom off here intentionally: the MCP Registry expects
+      # the server-name label on a plain image manifest. Evidence is generated
+      # and attached independently below.
       - name: Build and push image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -63,24 +66,71 @@ jobs:
             ghcr.io/granolacowboy/intake-triage-mcp:${{ steps.release.outputs.version }}
             ghcr.io/granolacowboy/intake-triage-mcp:latest
 
-      - name: Smoke test (initialize + tools/list over stdio)
+      - name: Smoke test initialize and tools/list over stdio
+        shell: bash
         run: |
           set -euo pipefail
-          IMAGE=ghcr.io/granolacowboy/intake-triage-mcp:${{ steps.release.outputs.version }}
+          IMAGE="${{ steps.release.outputs.image }}:${{ steps.release.outputs.version }}"
           docker pull "$IMAGE"
           REQ='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci-smoke","version":"0.0.0"}}}
           {"jsonrpc":"2.0","method":"notifications/initialized"}
           {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
           OUT=$(printf '%s\n' "$REQ" | timeout 120 docker run -i --rm "$IMAGE" 2>/dev/null || true)
-          echo "--- server stdout ---"; echo "$OUT"
+          echo "--- server stdout ---"
+          echo "$OUT"
           for t in intake_list_practice_areas intake_check_conflicts intake_validate_matter intake_draft_followup intake_log_triage; do
-            echo "$OUT" | grep -q "\"$t\"" || { echo "::error::smoke test failed: tool '$t' not found in tools/list"; exit 1; }
+            echo "$OUT" | grep -q "\"$t\"" || {
+              echo "::error::smoke test failed: tool '$t' not found in tools/list"
+              exit 1
+            }
           done
-          echo "SMOKE OK: all 5 tools present"
+
+      - name: Generate CycloneDX SBOM
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.release.outputs.image }}@${{ steps.build.outputs.digest }}
+          format: cyclonedx
+          output: sbom.cdx.json
+          exit-code: "0"
+
+      - name: Record HIGH and CRITICAL vulnerability evidence
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.release.outputs.image }}@${{ steps.build.outputs.digest }}
+          format: json
+          output: trivy-vulnerabilities.json
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+
+      - name: Fail closed on fixable CRITICAL vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.release.outputs.image }}@${{ steps.build.outputs.digest }}
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.1.2
+        with:
+          cosign-release: v3.1.3
+
+      - name: Sign image and attest SBOM with GitHub OIDC
+        env:
+          IMAGE: ${{ steps.release.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cosign sign --yes "$IMAGE@$DIGEST"
+          cosign attest --yes --type cyclonedx --predicate sbom.cdx.json "$IMAGE@$DIGEST"
 
       - name: Ensure image is publicly pullable
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: |
           set -uo pipefail
           VIS=$(gh api /user/packages/container/intake-triage-mcp --jq .visibility 2>/dev/null || echo unknown)
@@ -88,28 +138,71 @@ jobs:
           if [ "$VIS" != "public" ]; then
             gh api -X PATCH /user/packages/container/intake-triage-mcp -f visibility=public 2>/dev/null \
               && echo "Set package visibility to public." \
-              || echo "Could not auto-set visibility with GITHUB_TOKEN (expected; needs one UI toggle)."
+              || echo "Could not auto-set visibility with GITHUB_TOKEN."
           fi
           TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:granolacowboy/intake-triage-mcp:pull" | python3 -c "import sys,json;print(json.load(sys.stdin).get('token',''))")
           CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" \
             -H "Accept: application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json,application/vnd.oci.image.index.v1+json" \
             "https://ghcr.io/v2/granolacowboy/intake-triage-mcp/manifests/${{ steps.release.outputs.version }}")
           echo "Anonymous manifest pull: HTTP $CODE"
-          if [ "$CODE" != "200" ]; then
-            echo "::error::ghcr.io/granolacowboy/intake-triage-mcp:${{ steps.release.outputs.version }} is not publicly pullable (HTTP $CODE). In GitHub: Profile -> Packages -> intake-triage-mcp -> Package settings -> Change visibility -> Public, then re-run this workflow (Actions -> Publish to MCP Registry -> Run workflow)."
+          [ "$CODE" = "200" ] || {
+            echo "::error::published image is not publicly pullable (HTTP $CODE)"
             exit 1
-          fi
-          echo "Image is publicly pullable."
+          }
 
       - name: Install mcp-publisher
+        shell: bash
         run: |
-          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          set -euo pipefail
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
 
       - name: Validate server.json
         run: ./mcp-publisher validate
 
-      - name: Authenticate to MCP Registry (GitHub OIDC)
+      - name: Authenticate to MCP Registry with GitHub OIDC
         run: ./mcp-publisher login github-oidc
 
       - name: Publish server to MCP Registry
         run: ./mcp-publisher publish
+
+      - name: Write release evidence manifest
+        shell: bash
+        run: |
+          cat > release-evidence.txt <<EOF
+          repository=${GITHUB_REPOSITORY}
+          commit=${GITHUB_SHA}
+          version=${{ steps.release.outputs.version }}
+          image=${{ steps.release.outputs.image }}
+          digest=${{ steps.build.outputs.digest }}
+          registry_name=io.github.granolacowboy/intake-triage-mcp
+          runtime_user=non-root:mcp
+          vulnerability_gate=fixable CRITICAL
+          sbom=cyclonedx
+          signing=cosign keyless GitHub OIDC
+          EOF
+
+      - name: Upload release evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-${{ steps.release.outputs.version }}
+          path: |
+            sbom.cdx.json
+            trivy-vulnerabilities.json
+            release-evidence.txt
+          retention-days: 90
+
+      - name: Create or update GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" sbom.cdx.json trivy-vulnerabilities.json release-evidence.txt --clobber
+          else
+            gh release create "$TAG" \
+              sbom.cdx.json trivy-vulnerabilities.json release-evidence.txt \
+              --generate-notes --verify-tag
+          fi
