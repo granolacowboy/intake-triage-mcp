@@ -21,6 +21,8 @@ This server splits the work accordingly:
 
 The server makes **no LLM calls and no network calls**. Same inputs, same outputs, every time. The published container also runs as an unprivileged `mcp` user rather than root.
 
+> **Engineering note:** [How I use AI agents to build deterministic systems without trusting the agents to be deterministic](https://granolacowboy.dev/writing/post-4-deterministic-ai) explains the broader verification pattern behind this project.
+
 ## Design rationale
 
 - **Deterministic tools, client-side extraction.** An MCP tool that calls an LLM to "summarize" hides nondeterminism behind a tool boundary. Extraction and summarization stay with the client model; every tool here is a pure function over validated inputs (plus one append-only file write).
