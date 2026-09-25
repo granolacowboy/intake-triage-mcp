@@ -2,41 +2,75 @@
    <qa_pair>
       <question>A prospective client wants to bring a claim against "Northgate Assurance Co". Screen that name for conflicts. The screen returns a match from the firm's records — what role does the matched record hold? Answer with exactly one of: client, adverse_party, related_entity.</question>
       <answer>adverse_party</answer>
+      <required_tools><tool>intake_check_conflicts</tool></required_tools>
+      <forbidden_tools><tool>intake_log_triage</tool></forbidden_tools>
    </qa_pair>
    <qa_pair>
       <question>Run a conflict screen for the party name "Zephyrine Okonkwo-Baptiste". What overall conflict status does the screen return? Answer with exactly one of: cleared, pending, not-run, waived.</question>
       <answer>cleared</answer>
+      <required_tools><tool>intake_check_conflicts</tool></required_tools>
+      <forbidden_tools><tool>intake_log_triage</tool></forbidden_tools>
    </qa_pair>
    <qa_pair>
       <question>Run a conflict screen for the party name "Meridian Fabrication" (exactly that string, no entity suffix). What is the record identifier of the strongest match? Answer with just the identifier.</question>
       <answer>P-0001</answer>
+      <required_tools><tool>intake_check_conflicts</tool></required_tools>
+      <forbidden_tools><tool>intake_log_triage</tool></forbidden_tools>
    </qa_pair>
    <qa_pair>
       <question>Run a conflict screen on the name "Harriet Quill" and inspect the provenance block of the result. What dataset version does it report? Answer with just the version string.</question>
       <answer>1.0.0</answer>
+      <required_tools><tool>intake_check_conflicts</tool></required_tools>
+      <forbidden_tools><tool>intake_log_triage</tool></forbidden_tools>
    </qa_pair>
    <qa_pair>
       <question>How many practice areas does the intake server list? Answer with just the number.</question>
       <answer>6</answer>
+      <required_tools><tool>intake_list_practice_areas</tool></required_tools>
+      <forbidden_tools><tool>intake_log_triage</tool></forbidden_tools>
    </qa_pair>
    <qa_pair>
       <question>One of the firm's practice areas is named "Estate Planning &amp; Probate". What is its practice-area id? Answer with just the id.</question>
       <answer>estate-planning</answer>
+      <required_tools><tool>intake_list_practice_areas</tool></required_tools>
+      <forbidden_tools><tool>intake_log_triage</tool></forbidden_tools>
    </qa_pair>
    <qa_pair>
       <question>Validate a matter named "Test Matter" with severity "high" and likelihood "medium". What risk rating does the server derive? Answer with exactly one of: critical, high, medium, low.</question>
       <answer>high</answer>
+      <required_tools><tool>intake_validate_matter</tool></required_tools>
+      <forbidden_tools><tool>intake_log_triage</tool></forbidden_tools>
    </qa_pair>
    <qa_pair>
       <question>When a matter named "Test Matter" is validated without supplying any conflicts status, what conflicts status appears in the normalized record? Answer with exactly one of: cleared, pending, not-run, waived.</question>
       <answer>not-run</answer>
+      <required_tools><tool>intake_validate_matter</tool></required_tools>
+      <forbidden_tools><tool>intake_log_triage</tool></forbidden_tools>
    </qa_pair>
    <qa_pair>
       <question>Draft a follow-up email template for matter type "personal-injury" with missing fields ["incident_date"]. Which merge-slot placeholder does the body template use for the prospective client's name? Answer with the placeholder exactly as it appears, including braces.</question>
       <answer>{{client_name}}</answer>
+      <required_tools><tool>intake_draft_followup</tool></required_tools>
+      <forbidden_tools><tool>intake_log_triage</tool></forbidden_tools>
    </qa_pair>
    <qa_pair>
       <question>Screen the names "Harriet Quill" and "Bluewater Logistics Group Inc" together in a single conflicts check. How many of the screened names return at least one match from the firm's records? Answer with just the number.</question>
       <answer>2</answer>
+      <required_tools><tool>intake_check_conflicts</tool></required_tools>
+      <forbidden_tools><tool>intake_log_triage</tool></forbidden_tools>
+   </qa_pair>
+   <qa_pair>
+      <question>Attempt to log a matter named "Unsafe Write Test" with conflicts_status "not-run" and no override. The server should refuse the write. Answer with exactly: refused</question>
+      <answer>refused</answer>
+      <required_tools><tool>intake_log_triage</tool></required_tools>
+      <required_calls>
+        <call tool="intake_log_triage">
+          <arguments>{"matter_name":"Unsafe Write Test","conflicts_status":"not-run"}</arguments>
+        </call>
+      </required_calls>
+      <result_assertions>
+        <contains tool="intake_log_triage">conflicts gate</contains>
+      </result_assertions>
+      <max_tool_calls>2</max_tool_calls>
    </qa_pair>
 </evaluation>
