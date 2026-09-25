@@ -492,6 +492,8 @@ class CheckConflictsInput(BaseModel):
         cleaned = [n.strip() for n in v if n and n.strip()]
         if not cleaned:
             raise ValueError("party_names must contain at least one non-empty name")
+        if any(len(name) > 200 for name in cleaned):
+            raise ValueError("each party name must be 200 characters or fewer")
         return cleaned
 
 
@@ -582,6 +584,8 @@ class DraftFollowupInput(BaseModel):
         cleaned = [f.strip() for f in v if f and f.strip()]
         if not cleaned:
             raise ValueError("missing_fields must contain at least one non-empty field name")
+        if any(len(field_name) > 100 for field_name in cleaned):
+            raise ValueError("each missing field name must be 100 characters or fewer")
         return cleaned
 
 
@@ -607,11 +611,26 @@ class LogTriageInput(BaseModel):
         default=None, description="Documented rationale for bypassing the conflicts gate (only with 'not-run').",
         max_length=1000)
 
+    @field_validator("parties_checked")
+    @classmethod
+    def checked_parties_are_bounded(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return v
+        cleaned = [name.strip() for name in v if name and name.strip()]
+        if len(cleaned) != len(v):
+            raise ValueError("parties_checked cannot contain blank names")
+        if any(len(name) > 200 for name in cleaned):
+            raise ValueError("each checked party name must be 200 characters or fewer")
+        return cleaned
+
     @model_validator(mode="after")
     def override_fields_together(self) -> "LogTriageInput":
         if bool(self.conflicts_override_by) != bool(self.conflicts_override_rationale):
             raise ValueError(
                 "conflicts_override_by and conflicts_override_rationale must be provided together")
+        if self.conflicts_override_by and self.conflicts_status != ConflictsStatus.NOT_RUN:
+            raise ValueError(
+                "conflicts override fields are only valid when conflicts_status='not-run'")
         return self
 
 
