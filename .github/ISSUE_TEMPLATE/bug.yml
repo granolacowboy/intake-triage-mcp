@@ -1,0 +1,41 @@
+name: Bug report
+description: Report incorrect deterministic behavior or a reproducible failure
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: What happened? Include the smallest fictional/reproducible input.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What deterministic behavior or invariant did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Test output, tool response, traceback, or commit/digest. Do not include client, matter, credential, or personal data.
+    validations:
+      required: true
+  - type: dropdown
+    id: invariant
+    attributes:
+      label: Area
+      options:
+        - conflicts matching/provenance
+        - input validation
+        - conflicts write gate
+        - append-only logging
+        - MCP protocol/schema
+        - container/release
+        - documentation
+        - other
+    validations:
+      required: true
