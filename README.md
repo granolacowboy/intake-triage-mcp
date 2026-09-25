@@ -107,7 +107,7 @@ docker run -i --rm \
 
 ### Published image and MCP Registry
 
-A `v*` tag triggers the `publish-mcp.yml` workflow. It validates tag/version alignment, builds and pushes the image, smoke-tests `initialize` + `tools/list`, generates a CycloneDX SBOM, records HIGH/CRITICAL vulnerability findings, fails closed on fixable CRITICAL findings, signs the image and attests the SBOM digest with keyless Sigstore/Cosign via GitHub OIDC, confirms anonymous pulls work, publishes to the official [MCP Registry](https://github.com/modelcontextprotocol/registry), and creates a GitHub Release with the evidence files attached.
+A `v*` tag triggers the `publish-mcp.yml` workflow. The release job requires a dedicated repository-scoped runner labeled `triage-release`; the central `gcd` verifier runner is intentionally not used for publication. It validates tag/version alignment, builds and pushes the image, smoke-tests `initialize` + `tools/list`, generates a CycloneDX SBOM, records HIGH/CRITICAL vulnerability findings, fails closed on fixable CRITICAL findings, signs the image and attests the SBOM digest with keyless Sigstore/Cosign via GitHub OIDC, confirms anonymous pulls work, publishes to the official [MCP Registry](https://github.com/modelcontextprotocol/registry), and creates a GitHub Release with the evidence files attached.
 
 BuildKit's embedded provenance/SBOM output remains disabled deliberately because the MCP Registry currently expects the ownership label on a plain image manifest. Supply-chain evidence is therefore attached as separate OCI attestations and release artifacts rather than hidden behind a multi-manifest attestation index. The eval suite remains a separate, model-driven check.
 
