@@ -606,10 +606,10 @@ class LogTriageInput(BaseModel):
     summary: Optional[str] = Field(default=None, description="One-line triage summary for the log.", max_length=1000)
     conflicts_override_by: Optional[str] = Field(
         default=None, description="Name of the person explicitly bypassing the conflicts gate (only with 'not-run').",
-        max_length=200)
+        min_length=1, max_length=200)
     conflicts_override_rationale: Optional[str] = Field(
         default=None, description="Documented rationale for bypassing the conflicts gate (only with 'not-run').",
-        max_length=1000)
+        min_length=1, max_length=1000)
 
     @field_validator("parties_checked")
     @classmethod
