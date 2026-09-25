@@ -6,7 +6,7 @@
 
 A small, deterministic [MCP](https://modelcontextprotocol.io) server for legal **intake triage**: practice-area lookup, conflict screening, matter validation, follow-up drafting, and triage logging, with a hard conflicts gate.
 
-**Start with the proof:** [end-to-end safety demo](docs/demo.md) · [evaluation evidence policy](docs/evidence/README.md) · [changelog](CHANGELOG.md)
+**Start with the proof:** [end-to-end safety demo](docs/demo.md) · [evaluation evidence policy](docs/evidence/README.md) · [reusable MCP reference pattern](docs/reference-pattern.md) · [changelog](CHANGELOG.md)
 
 **Server name:** `intake_triage_mcp` · **Transport:** stdio · **Dependencies:** `mcp[cli]`, `pydantic` · **Sample data:** fictional, bundled
 
