@@ -4,13 +4,12 @@ name: Publish to MCP Registry
 # ownership label from the image config. Supply-chain evidence is attached
 # separately as SBOM, vulnerability report, and keyless Sigstore attestations.
 on:
-  workflow_dispatch:
   push:
     tags: ["v*"]
 
 jobs:
   publish:
-    runs-on: [self-hosted, gcd]
+    runs-on: [self-hosted, triage-release]
     timeout-minutes: 30
     permissions:
       id-token: write
