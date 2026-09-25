@@ -1,6 +1,6 @@
 # intake-triage-mcp
 
-[![CI](https://github.com/granolacowboy/intake-triage-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/granolacowboy/intake-triage-mcp/actions/workflows/ci.yml)
+[![Verified](https://github.com/granolacowboy/granolacowboy.dev/actions/workflows/verify-intake-triage-mcp.yml/badge.svg)](https://github.com/granolacowboy/granolacowboy.dev/actions/workflows/verify-intake-triage-mcp.yml)
 [![Publish MCP](https://github.com/granolacowboy/intake-triage-mcp/actions/workflows/publish-mcp.yml/badge.svg)](https://github.com/granolacowboy/intake-triage-mcp/actions/workflows/publish-mcp.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
@@ -268,7 +268,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-CI runs the unit suite on Python 3.10 and 3.12, then builds the Docker image and performs an MCP protocol smoke test that verifies all five tools are discoverable before a change is considered healthy.
+The central portfolio verifier runs the deterministic unit suite with coverage and uses the official MCP Python client to initialize the server and verify all five tools are discoverable from `python server.py`. Container build, SBOM, signing, and registry verification remain part of the release pipeline.
 
 ## Evaluation
 
