@@ -139,7 +139,7 @@ Before tagging:
 
 A release workflow should then produce or verify, as applicable:
 
-- immutable versioned image/package;
+- versioned image/package plus its immutable digest or artifact checksum;
 - non-root runtime;
 - protocol smoke test;
 - SBOM;
