@@ -6,6 +6,8 @@
 
 A small, deterministic [MCP](https://modelcontextprotocol.io) server for legal **intake triage**: practice-area lookup, conflict screening, matter validation, follow-up drafting, and triage logging, with a hard conflicts gate.
 
+**Start with the proof:** [end-to-end safety demo](docs/demo.md) · [evaluation evidence policy](docs/evidence/README.md) · [changelog](CHANGELOG.md)
+
 **Server name:** `intake_triage_mcp` · **Transport:** stdio · **Dependencies:** `mcp[cli]`, `pydantic` · **Sample data:** fictional, bundled
 
 ---
@@ -259,7 +261,7 @@ Nothing is written. If a named human genuinely needs to bypass (e.g., an emergen
 
 ## Testing
 
-Plain pytest **unit tests** cover the deterministic logic: name normalization and similarity, match classification, the full 3×3 risk matrix, validation and missing-field reporting, template determinism, the conflicts gate, and JSONL appends. (These are unit tests, not the eval harness; that's below.)
+Plain pytest **unit tests** cover the deterministic logic: name normalization and similarity, match classification, the full 3×3 risk matrix, validation and missing-field reporting, template determinism, the conflicts gate, JSONL appends, hostile-looking input, bounded free-form fields, invalid overrides, and write I/O failures. These are deterministic unit tests; the agent-behavior evaluation is separate.
 
 ```bash
 pip install -r requirements-dev.txt
@@ -270,17 +272,26 @@ CI runs the unit suite on Python 3.10 and 3.12, then builds the Docker image and
 
 ## Evaluation
 
-The eval harness follows the [mcp-builder](https://github.com/anthropics/skills) methodology: a golden set of 10 read-only, stable question/answer pairs (`evals/evaluation.xml`), run by an LLM agent that has access *only* to this server's tools, scored by exact string comparison. `evals/evaluation.py` and `evals/connections.py` are copied unmodified from the mcp-builder skill's scripts.
+The repository keeps only the golden suite: [`evals/evaluation.xml`](evals/evaluation.xml). Execution belongs to the reusable [`intake-eval-harness`](https://github.com/granolacowboy/intake-eval-harness), so fixes to scoring, provenance, JSON/JUnit evidence, and trace assertions do not diverge across MCP repositories.
 
-Every golden answer was verified directly against the server's deterministic logic. Running the LLM-driven harness requires an Anthropic API key:
+The suite tests both **answers** and **behavior**. Read-only cases require the expected lookup/validation tool and forbid `intake_log_triage`. A safety case intentionally calls `intake_log_triage` with `conflicts_status="not-run"`, requires the result to contain `conflicts gate`, and expects the agent to report that the write was refused.
+
+A model-driven run requires an Anthropic API key and is deliberately opt-in:
 
 ```bash
-pip install -r evals/requirements.txt
+git clone https://github.com/granolacowboy/intake-eval-harness.git ../intake-eval-harness
+python -m pip install -e ../intake-eval-harness
 export ANTHROPIC_API_KEY=your_key_here
-python evals/evaluation.py -t stdio -c python -a server.py -o evals/report.md evals/evaluation.xml
+
+mcp-eval evals/evaluation.xml \
+  -t stdio -c python -a server.py \
+  --server-revision "$(git rev-parse HEAD)" \
+  -o evals/report.md \
+  --json-output evals/evidence.json \
+  --junit-output evals/junit.xml
 ```
 
-Run from the repo root (the harness launches `python server.py` itself; don't start the server manually). The generated `evals/report.md` includes accuracy, per-task tool-call traces, and the agent's feedback on the tool design.
+Reviewed evidence should record the exact model, suite hash, server revision, harness revision, and UTC timestamp together. The repository intentionally does not present a static score as if it were timeless.
 
 ## Limitations: what this server does not do
 
