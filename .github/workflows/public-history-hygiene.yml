@@ -1,8 +1,12 @@
 name: Public history hygiene
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, edited, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to inspect
+        required: true
+        type: number
 
 permissions:
   contents: read
@@ -17,7 +21,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPOSITORY: ${{ github.repository }}
-          GH_EVENT_PATH: ${{ github.event_path }}
+          PR_NUMBER: ${{ inputs.pr_number }}
         shell: bash
         run: |
           python3 - <<'PY'
@@ -28,13 +32,31 @@ jobs:
           import urllib.error
           import urllib.request
 
-          with open(os.environ["GH_EVENT_PATH"], "r", encoding="utf-8") as handle:
-              event = json.load(handle)
+          repo = os.environ["GH_REPOSITORY"]
+          number = os.environ["PR_NUMBER"]
+          token = os.environ["GH_TOKEN"]
 
-          pr = event.get("pull_request")
-          if not pr:
-              print("::error title=Public history hygiene::Expected a pull_request event.")
-              sys.exit(1)
+          def get_json(url):
+              request = urllib.request.Request(
+                  url,
+                  headers={
+                      "Accept": "application/vnd.github+json",
+                      "Authorization": f"Bearer {token}",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                      "User-Agent": "public-history-hygiene",
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(request) as response:
+                      return json.load(response)
+              except urllib.error.HTTPError as exc:
+                  print(
+                      f"::error title=Public history hygiene::"
+                      f"GitHub API HTTP {exc.code} while reading PR #{number}."
+                  )
+                  sys.exit(1)
+
+          pr = get_json(f"https://api.github.com/repos/{repo}/pulls/{number}")
 
           patterns = [
               (
@@ -69,42 +91,16 @@ jobs:
               ("pull request body", pr.get("body") or ""),
           ]
 
-          repo = os.environ["GH_REPOSITORY"]
-          number = event.get("number")
-          if not number:
-              print("::error title=Public history hygiene::Pull request number is missing.")
-              sys.exit(1)
-
           page = 1
           while True:
-              url = (
+              commits = get_json(
                   f"https://api.github.com/repos/{repo}/pulls/{number}/commits"
                   f"?per_page=100&page={page}"
               )
-              request = urllib.request.Request(
-                  url,
-                  headers={
-                      "Accept": "application/vnd.github+json",
-                      "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
-                      "X-GitHub-Api-Version": "2022-11-28",
-                      "User-Agent": "public-history-hygiene",
-                  },
-              )
-              try:
-                  with urllib.request.urlopen(request) as response:
-                      commits = json.load(response)
-              except urllib.error.HTTPError as exc:
-                  print(
-                      f"::error title=Public history hygiene::"
-                      f"Could not inspect PR commits (GitHub API HTTP {exc.code})."
-                  )
-                  sys.exit(1)
-
               for commit in commits:
                   sha = commit.get("sha", "")[:12]
                   message = (commit.get("commit") or {}).get("message") or ""
                   surfaces.append((f"commit {sha}", message))
-
               if len(commits) < 100:
                   break
               page += 1
@@ -125,7 +121,7 @@ jobs:
               sys.exit(1)
 
           print(
-              f"Public history hygiene passed: scanned PR metadata and "
-              f"{len(surfaces) - 2} commit message(s)."
+              f"Public history hygiene passed for PR #{number}: "
+              f"scanned PR metadata and {len(surfaces) - 2} commit message(s)."
           )
           PY
