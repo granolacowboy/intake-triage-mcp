@@ -29,3 +29,7 @@ For tool changes, include unit tests and update the golden suite in `evals/` (an
 Changes to `Dockerfile`, `server.json`, or `.github/workflows/publish-mcp.yml` affect the published OCI/MCP artifact. Keep `server.json` and release tags version-aligned. Do not weaken the smoke test, public-pull check, vulnerability gate, signature, or provenance steps without documenting the tradeoff.
 
 Security issues should be reported through the account-level security policy rather than a public issue.
+
+## Public Git history
+
+Preserve useful engineering rationale in commits and pull requests, but keep agent/model attribution, session provenance, prompt transcripts, and tool chatter out of the public history. See the [account-level public development policy](https://github.com/granolacowboy/.github/blob/main/PUBLIC_DEVELOPMENT.md).
