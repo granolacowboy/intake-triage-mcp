@@ -1,0 +1,13 @@
+name: Public history hygiene
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  public-history-hygiene:
+    uses: granolacowboy/.github/.github/workflows/public-history-hygiene.yml@main
